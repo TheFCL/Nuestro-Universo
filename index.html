@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Nuestro Universo</title>
+<style>
+  :root {
+    --bg-0: #020205;
+    --accent: #ffd76b;
+    --accent-soft: #ffe9ab;
+    --text-1: #f4f2ff;
+    --text-dim: #9aa0c3;
+    --glass: rgba(15, 12, 35, 0.65);
+    --glass-border: rgba(255, 255, 255, 0.15);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg-0); font-family: 'Georgia', 'Times New Roman', serif;
+    color: var(--text-1); touch-action: none; overscroll-behavior: none;
+  }
+  #universo { position: fixed; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; }
+  #universo.dragging { cursor: grabbing; }
+
+  /* ---------- Reproductor Oculto ---------- */
+  #bg-music { display: none; }
+
+  /* ---------- Loader ---------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; 
+    align-items: center; justify-content: center; gap: 22px;
+    background: radial-gradient(ellipse at 50% 40%, #0c1030 0%, #020205 80%);
+    transition: opacity .8s ease, visibility .8s ease;
+  }
+  #loader.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .loader-orbit {
+    width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(255,215,107,0.25);
+    position: relative; animation: spin 2.6s linear infinite; box-shadow: 0 0 20px rgba(255,215,107,0.1);
+  }
+  .loader-planet {
+    position: absolute; top: -5px; left: 50%; transform: translateX(-50%);
+    width: 12px; height: 12px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--accent-soft), var(--accent) 60%, #a5721a 100%);
+    box-shadow: 0 0 14px rgba(255,215,107,0.8);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-text { font-family: system-ui, sans-serif; font-size: 13px; letter-spacing: .08em; color: var(--text-dim); }
+
+  /* ---------- Misión / Interfaz Mejorada ---------- */
+  .briefing {
+    position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+    padding: 24px; background: rgba(2, 2, 5, 0.7); backdrop-filter: blur(8px);
+    transition: opacity .6s ease, visibility .6s ease;
+  }
+  .briefing.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .briefing-card {
+    width: min(380px, 100%); text-align: center; font-family: system-ui, sans-serif;
+    background: var(--glass); backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 215, 107, 0.3); border-radius: 24px; padding: 40px 30px 35px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.8), inset 0 0 30px rgba(255, 215, 107, 0.05);
+    transform: translateY(0); transition: transform 0.3s ease;
+  }
+  .briefing-planet {
+    width: 85px; height: 85px; margin: 0 auto 25px; border-radius: 50%; position: relative;
+    background: radial-gradient(circle at 35% 32%, #fff6da, #ffe9ab 45%, #c98f2b 100%);
+    box-shadow: 0 0 45px rgba(255,215,107,0.4);
+  }
+  .briefing-planet-ring {
+    position: absolute; top: 50%; left: 50%; width: 145px; height: 38px; margin: -19px 0 0 -72.5px;
+    border: 2px solid rgba(255,224,160,0.6); border-radius: 50%; transform: rotate(-15deg);
+  }
+  .briefing-title { font-family: 'Georgia', serif; font-size: 22px; color: var(--accent-soft); margin: 0 0 12px; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+  .briefing-text { font-size: 14px; line-height: 1.6; color: var(--text-dim); margin: 0 0 24px; }
+  .briefing-objectives { list-style: none; margin: 0 0 32px; padding: 0; text-align: left; display: flex; flex-direction: column; gap: 12px; }
+  .briefing-objectives li { font-size: 13px; color: var(--text-1); display: flex; gap: 12px; align-items: flex-start; line-height: 1.4; background: rgba(255,255,255,0.03); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); }
+  .briefing-btn {
+    border: none; cursor: pointer; padding: 14px 32px; border-radius: 999px;
+    background: linear-gradient(135deg, #ffe9ab, #ffd76b); color: #3a2a06;
+    font-weight: 600; font-size: 14.5px; letter-spacing: .02em;
+    box-shadow: 0 10px 30px rgba(255,215,107,0.3); transition: all .2s ease;
+  }
+  .briefing-btn:active { transform: scale(.95); box-shadow: 0 5px 15px rgba(255,215,107,0.2); }
+
+  /* ---------- UI y Modales ---------- */
+  #ui { position: fixed; inset: 0; pointer-events: none; z-index: 5; padding: env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); }
+  .hint { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); font-family: system-ui, sans-serif; font-size: 12px; color: var(--text-dim); background: var(--glass); border: 1px solid var(--glass-border); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 999px; opacity: 0; transition: opacity .6s ease; }
+  .hint.show { opacity: 1; }
+  .progress-badge { position: absolute; top: 66px; left: 50%; display: flex; align-items: center; gap: 7px; font-family: system-ui, sans-serif; font-size: 12px; color: var(--accent-soft); background: var(--glass); border: 1px solid var(--glass-border); padding: 6px 14px; border-radius: 999px; opacity: 0; transform: translate(-50%,-6px) scale(.96); transition: all .5s ease; }
+  .progress-badge.show { opacity: 1; transform: translate(-50%,0) scale(1); }
+  .progress-badge.pulse { animation: badgePulse .6s ease; }
+  @keyframes badgePulse { 0%,100%{transform:translate(-50%,0) scale(1);} 40%{transform:translate(-50%,0) scale(1.12);} }
+  
+  .pill-btn { position: absolute; top: 18px; right: 18px; pointer-events: auto; display: flex; align-items: center; gap: 6px; font-family: system-ui, sans-serif; font-size: 13px; color: var(--text-1); background: var(--glass); border: 1px solid var(--glass-border); padding: 9px 15px 9px 12px; border-radius: 999px; cursor: pointer; backdrop-filter: blur(10px); transition: all .2s ease; }
+  .pill-btn.active { background: rgba(255,215,107,0.16); box-shadow: 0 0 22px rgba(255,215,107,0.35); border-color: rgba(255,215,107,0.4); }
+  .zoom-controls { position: absolute; bottom: 22px; right: 18px; pointer-events: auto; display: flex; flex-direction: column; gap: 10px; }
+  .round-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--glass-border); background: var(--glass); color: var(--text-1); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+  .round-btn.small { width: 36px; height: 36px; font-size: 15px; margin: 0 auto; }
+  
+  .compass { position: absolute; bottom: 24px; left: 18px; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: 0; transform: translateY(10px); transition: all .4s ease; }
+  .compass.show { opacity: 1; transform: translateY(0); }
+  .compass-ring { width: 56px; height: 56px; border-radius: 50%; background: var(--glass); border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 18px rgba(255,215,107,0.15); backdrop-filter: blur(10px); }
+  .compass-needle { font-size: 20px; color: var(--accent); transition: transform .3s ease-out; filter: drop-shadow(0 0 6px rgba(255,215,107,0.7)); }
+  .compass-label { font-family: system-ui, sans-serif; font-size: 10.5px; color: var(--text-dim); background: var(--glass); border: 1px solid var(--glass-border); padding: 3px 10px; border-radius: 999px; }
+
+  .discovery-banner { position: absolute; top: 35%; left: 50%; transform: translate(-50%,10px); text-align: center; opacity: 0; transition: all .6s ease; width: 90vw; }
+  .discovery-banner.show { opacity: 1; transform: translate(-50%,0); }
+  .db-title { font-family: 'Georgia', serif; font-size: 22px; color: var(--accent-soft); text-shadow: 0 0 24px rgba(255,215,107,0.6); margin-bottom: 4px; }
+  .db-sub { font-family: system-ui, sans-serif; font-size: 13px; color: var(--text-dim); }
+
+  .modal-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(2,3,10,0.72); backdrop-filter: blur(6px); opacity: 0; visibility: hidden; transition: all .35s ease; }
+  .modal-overlay.open { opacity: 1; visibility: visible; pointer-events: auto; }
+  .modal-card { position: relative; width: min(420px, 100%); max-height: 85vh; overflow-y: auto; background: var(--glass); border: 1px solid rgba(255,255,255,0.15); border-radius: 22px; padding: 34px 26px 30px; text-align: center; transform: scale(.85) translateY(20px); transition: all .4s cubic-bezier(.2,.9,.3,1.3); box-shadow: 0 30px 80px rgba(0,0,0,0.7); backdrop-filter: blur(16px); }
+  .modal-overlay.open .modal-card { transform: scale(1) translateY(0); }
+  .close-btn { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border-radius: 50%; border: none; background: rgba(255,255,255,0.1); color: var(--text-dim); font-size: 14px; cursor: pointer; }
+  
+  .memory-photo { width: 100%; aspect-ratio: 4/3; border-radius: 16px; object-fit: cover; margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  .memory-placeholder { width: 100%; aspect-ratio: 4/3; border-radius: 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; font-size: 40px; background: linear-gradient(135deg,#2b2560,#191338); }
+  .memory-label { font-family: system-ui, sans-serif; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .memory-phrase { font-size: 22px; font-style: italic; line-height: 1.5; color: var(--text-1); }
+  .memory-date { font-size: 26px; color: var(--accent-soft); letter-spacing: .03em; }
+
+  .dedication-card { padding-top: 40px; overflow: visible; }
+  .dedication-glow { position: absolute; top: -40px; left: 50%; transform: translateX(-50%); width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(255,215,107,0.45), transparent 70%); filter: blur(10px); pointer-events: none; animation: pulseGlow 3s infinite; }
+  @keyframes pulseGlow{0%,100%{opacity:.6;} 50%{opacity:1; transform:translateX(-50%) scale(1.1);}}
+  .dedication-heart { font-size: 46px; margin-bottom: 6px; animation: heartBeat 1.8s infinite; }
+  @keyframes heartBeat{0%,100%{transform:scale(1);} 25%{transform:scale(1.15);} 40%{transform:scale(0.98);}}
+  .dedication-title { font-size: 24px; margin: 6px 0 14px; color: var(--accent-soft); }
+  .dedication-text { font-size: 17px; line-height: 1.75; white-space: pre-line; }
+</style>
+</head>
+<body>
+
+  <!-- Audio Oculto -->
+  <audio id="bg-music" src="cancion.mp3" loop></audio>
+
+  <div id="loader"><div class="loader-orbit"><div class="loader-planet"></div></div><p class="loader-text">Entrando al universo…</p></div>
+
+  <div id="briefing" class="briefing hidden">
+    <div class="briefing-card">
+      <div class="briefing-planet"><div class="briefing-planet-ring"></div></div>
+      <h1 id="briefing-title" class="briefing-title"></h1>
+      <p id="briefing-text" class="briefing-text"></p>
+      <ul id="briefing-objectives" class="briefing-objectives"></ul>
+      <button id="briefing-start" class="briefing-btn">Comenzar viaje ✨</button>
+    </div>
+  </div>
+
+  <canvas id="universo"></canvas>
+
+  <div id="ui">
+    <div id="hint" class="hint">✨ Arrastra para mirar · pellizca para zoom · toca lo que brille</div>
+    <div id="progress-badge" class="progress-badge"><span id="progress-text">0 / 8 recuerdos</span></div>
+    <button id="btn-guia" class="pill-btn"><span>🧭</span> Guía</button>
+    <div class="zoom-controls">
+      <button id="zoom-in" class="round-btn">+</button>
+      <button id="zoom-out" class="round-btn">−</button>
+      <button id="zoom-reset" class="round-btn small">◎</button>
+    </div>
+    <div id="compass" class="compass"><div class="compass-ring"><div id="compass-needle" class="compass-needle">➤</div></div><div id="compass-label" class="compass-label">recuerdo cercano</div></div>
+    <div id="discovery-banner" class="discovery-banner"></div>
+  </div>
+
+  <div id="memory-modal" class="modal-overlay"><div class="modal-card memory-card"><button class="close-btn" data-close>✕</button><div id="memory-content"></div></div></div>
+  <div id="dedication-modal" class="modal-overlay"><div class="modal-card dedication-card"><button class="close-btn" data-close>✕</button><div class="dedication-glow"></div><div class="dedication-heart">💛</div><h2 class="dedication-title">Para ti</h2><p id="dedication-text" class="dedication-text"></p></div></div>
+  <div id="constellation-modal" class="modal-overlay"><div class="modal-card constellation-card"><button class="close-btn" data-close>✕</button><div id="constellation-content"></div></div></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+  (() => {
+    "use strict";
+
+    /* --- 1. CONFIGURACIÓN --- */
+    const MEMORIES = [
+      { type: "frase", text: "Desde que te conocí, todo empezó a tener más color." },
+      { type: "fecha", text: "14 · 02 · 2023", caption: "El día que todo comenzó" },
+      { type: "foto", photo: "foto1.jpg", caption: "Aquella tarde que no quiero olvidar" }, 
+      { type: "frase", text: "Contigo hasta el silencio se siente bien acompañado." },
+      { type: "fecha", text: "07 · 09 · 2024", caption: "Un antes y un después" },
+      { type: "foto", photo: "foto2.jpg", caption: "Esa sonrisa que me desarma" },
+      { type: "frase", text: "Eres mi lugar favorito, sin importar el mapa." },
+      { type: "frase", text: "Cada estrella de este cielo te la debo a ti." },
+    ];
+
+    const DEDICATION_TEXT = "Este pequeño universo tiene tantas estrellas como\nmotivos que encuentro para quererte.\n\nGracias por ser mi planeta favorito,\nmi lugar seguro entre tanto vacío.\n\nCon todo mi cariño, hoy y siempre. 💛";
+    const LORE_TITLE = "Una misión para encontrarte";
+    const LORE_TEXT = "En algún rincón de este cielo se esconden los recuerdos que hemos construido juntos, y al centro de todo, un planeta que solo existe porque tú existes. Tu misión, si decides aceptarla, es encontrarlo.";
+    const OBJECTIVES = [
+      { icon: "🌍", text: "Llega hasta Nuestro planeta" },
+      { icon: "✦", text: "Activa la Guía para revelar las constelaciones" },
+      { icon: "🔭", text: "Descubre los 8 recuerdos escondidos entre las estrellas" },
+    ];
+
+    /* --- 2. ESCENA BASE --- */
+    const canvas = document.getElementById("universo");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x020205, 0.00035); 
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 3000);
+    scene.add(new THREE.AmbientLight(0x3a3570, 1.1));
+    const keyLight = new THREE.PointLight(0xfff1cf, 1.4, 900, 2); keyLight.position.set(120, 160, 120); scene.add(keyLight);
+    const rimLight = new THREE.PointLight(0x6f8cff, 0.7, 900, 2); rimLight.position.set(-200, -100, -150); scene.add(rimLight);
+
+    function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); }
+    window.addEventListener("resize", resize); resize();
+
+    /* --- 3. TEXTURAS --- */
+    function makeGlowTexture(hex) {
+      const c = document.createElement("canvas"); c.width = c.height = 128; const ctx = c.getContext("2d");
+      const grad = ctx.createRadialGradient(64,64,0,64,64,64);
+      grad.addColorStop(0,"rgba(255,255,255,1)"); grad.addColorStop(0.25,hex); grad.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle = grad; ctx.fillRect(0,0,128,128); return new THREE.CanvasTexture(c);
+    }
+    const starGlow = makeGlowTexture("rgba(255,255,255,0.9)"), warmGlow = makeGlowTexture("rgba(255,224,160,0.95)");
+
+    function makePlanetTexture(base, spots, count) {
+      const c = document.createElement("canvas"); c.width=256; c.height=256; const ctx=c.getContext("2d");
+      ctx.fillStyle=base; ctx.fillRect(0,0,256,256);
+      for(let i=0;i<count;i++){
+        const x=Math.random()*256, y=Math.random()*256, r=Math.random()*30+4, grad=ctx.createRadialGradient(x,y,0,x,y,r);
+        grad.addColorStop(0,spots[Math.floor(Math.random()*spots.length)]); grad.addColorStop(1,"rgba(0,0,0,0)");
+        ctx.globalAlpha=Math.random()*0.5+0.25; ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+      }
+      const tex=new THREE.CanvasTexture(c); tex.wrapS=THREE.RepeatWrapping; return tex;
+    }
+    function makeRingTexture(hex) {
+      const c = document.createElement("canvas"); c.width = c.height = 256; const ctx = c.getContext("2d");
+      const grad = ctx.createRadialGradient(128,128,80,128,128,128);
+      grad.addColorStop(0,"rgba(0,0,0,0)"); grad.addColorStop(0.4,hex); grad.addColorStop(0.7,"rgba(0,0,0,0)"); grad.addColorStop(0.85,hex); grad.addColorStop(1,"rgba(0,0,0,0)");
+      ctx.fillStyle=grad; ctx.fillRect(0,0,256,256); return new THREE.CanvasTexture(c);
+    }
+
+    /* --- 4. FONDO Y NEBULOSAS --- */
+    let bgStars, stardust;
+    (function buildEnvironment() {
+      const N = 5000, pos = new Float32Array(N*3), col = new Float32Array(N*3), size = new Float32Array(N);
+      const pal = [[1,1,1],[0.8,0.86,1],[1,0.92,0.75],[1,0.8,0.82]];
+      for (let i=0; i<N; i++) {
+        const r = 500+Math.random()*900, th = Math.random()*Math.PI*2, ph = Math.acos(Math.random()*2-1);
+        pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=r*Math.sin(ph)*Math.sin(th); pos[i*3+2]=r*Math.cos(ph);
+        const c = pal[Math.floor(Math.random()*pal.length)]; col[i*3]=c[0]; col[i*3+1]=c[1]; col[i*3+2]=c[2]; size[i] = Math.random()*5.0+2.5;
+      }
+      bgStars = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos,3)).setAttribute("color", new THREE.BufferAttribute(col,3)).setAttribute("size", new THREE.BufferAttribute(size,1)), new THREE.PointsMaterial({ size: 2.5, map: starGlow, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true, opacity: 0.9 })); scene.add(bgStars);
+      
+      const N2 = 1200, pos2 = new Float32Array(N2*3), col2 = new Float32Array(N2*3), pal2 = [[0.55,0.6,1],[0.75,0.55,1],[0.6,0.8,1]];
+      for (let i=0; i<N2; i++) {
+        const r = 90+Math.random()*400, th = Math.random()*Math.PI*2, ph = Math.acos(Math.random()*2-1);
+        pos2[i*3]=r*Math.sin(ph)*Math.cos(th); pos2[i*3+1]=r*Math.sin(ph)*Math.sin(th); pos2[i*3+2]=r*Math.cos(ph);
+        const c = pal2[Math.floor(Math.random()*pal2.length)]; col2[i*3]=c[0]; col2[i*3+1]=c[1]; col2[i*3+2]=c[2];
+      }
+      stardust = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(pos2,3)).setAttribute("color", new THREE.BufferAttribute(col2,3)), new THREE.PointsMaterial({ size: 2.2, map: starGlow, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8, sizeAttenuation: true })); scene.add(stardust);
+    })();
+
+    const nebulaSprites = [];
+    [ { p: [-480, 150, -520], s: [900, 350] }, { p: [520, -250, -600], s: [450, 850] }, { p: [-350, -360, 700], s: [750, 400] }, { p: [420, 360, 680], s: [800, 300] }, { p: [0, -100, -880], s: [1000, 450] }, { p: [0, 600, 500], s: [600, 600] }, { p: [-800, 0, 300], s: [700, 800] } ].forEach((d, i) => {
+      const mat = new THREE.SpriteMaterial({ map: makeGlowTexture(["rgba(140,120,255,0.4)","rgba(90,150,255,0.3)","rgba(255,140,200,0.3)"][i%3]), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5 });
+      const sprite = new THREE.Sprite(mat); sprite.position.set(...d.p); sprite.scale.set(d.s[0], d.s[1], 1); scene.add(sprite);
+      nebulaSprites.push({ sprite, baseX: d.p[0], drift: (Math.random()-0.5)*0.00002, phase: Math.random()*Math.PI*2 });
+    });
+
+    /* --- 5. PLANETAS Y RECUERDOS --- */
+    const planets = [], interactiveObjects = [], memoryStars = [], usedPositions = [];
+    [{id:"p0",name:"Lumen",pos:[-190,60,-60],r:15,base:"#8fb8ff",s:["#3f5fa8","#c9dcff"],ring:false,oR:210,oSp:0.02},
+     {id:"p1",name:"Vesper",pos:[220,-40,-90],r:22,base:"#ffb37a",s:["#a8552e","#ffdcb0"],ring:true,oR:260,oSp:0.014},
+     {id:"p2",name:"Nébula Azul",pos:[-90,-110,160],r:12,base:"#b9a6ff",s:["#5a3fa0","#e3d6ff"],ring:false,oR:200,oSp:0.026},
+     {id:"p3",name:"Ígnea",pos:[120,130,140],r:10,base:"#ff8fa3",s:["#8f2f4a","#ffc9d4"],ring:false,oR:190,oSp:0.03},
+     {id:"sp",name:"Nuestro planeta",pos:[0,0,0],r:30,base:"#ffe9ab",s:["#c98f2b","#fff6da"],ring:true,special:true,oR:0,oSp:0}
+    ].forEach(def => {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(def.r,32,32), new THREE.MeshStandardMaterial({map: makePlanetTexture(def.base,def.s,46), roughness:0.8, emissive:def.base, emissiveIntensity: def.special?0.35:0.12}));
+      mesh.position.set(...def.pos); scene.add(mesh);
+      if(def.ring){
+        // FIX DE ANILLO OSCURO: depthWrite: false
+        const ring = new THREE.Mesh(new THREE.RingGeometry(def.r*1.5,def.r*2.3,48), new THREE.MeshBasicMaterial({map:makeRingTexture(def.special?"rgba(255,224,150,0.8)":"rgba(200,200,255,0.6)"), transparent:true, side:THREE.DoubleSide, depthWrite: false}));
+        ring.rotation.x = Math.PI/2.4; mesh.add(ring);
+      }
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({map:warmGlow, color:def.base, transparent:true, opacity:def.special?0.55:0.3, depthWrite:false, blending:THREE.AdditiveBlending}));
+      halo.scale.setScalar(def.r*(def.special?7:4.5)); mesh.add(halo);
+      const pObj = {def, mesh, angle:Math.random()*Math.PI*2, spin: (Math.random()*0.15+0.05)*(def.special?0.4:1), basePos:mesh.position.clone(), discovered:false};
+      planets.push(pObj); mesh.userData={type:"planet",ref:pObj}; interactiveObjects.push(mesh);
+    });
+
+    MEMORIES.forEach(mem => {
+      let pos, tries=0;
+      do {
+        const r = 130+Math.random()*110, t=Math.random()*Math.PI*2, p=Math.PI*0.28+Math.random()*Math.PI*0.5;
+        pos = new THREE.Vector3(r*Math.sin(p)*Math.cos(t), r*Math.cos(p)-20, r*Math.sin(p)*Math.sin(t));
+        tries++;
+      } while(usedPositions.some(p2 => p2.distanceTo(pos)<55) && tries<30);
+      usedPositions.push(pos);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:warmGlow, color:0xffe9b0, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending}));
+      sprite.position.copy(pos); sprite.scale.setScalar(9); scene.add(sprite);
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.9,10,10), new THREE.MeshBasicMaterial({color:0xfff6da})); core.position.copy(pos); scene.add(core);
+      const sObj = {memory:mem, sprite, core, pos, discovered:false, phase:Math.random()*Math.PI*2};
+      memoryStars.push(sObj); sprite.userData={type:"memoryStar",ref:sObj}; interactiveObjects.push(sprite);
+    });
+
+    /* --- 6. CONSTELACIONES Y FOTO --- */
+    const constellationGroups = [];
+    [{id:"camino", name:"El Camino Compartido", desc:"Cada paso que dimos juntos.", pts:[[-260,90,-220],[-220,60,-230],[-175,80,-215],[-130,40,-225],[-90,70,-210]], sec:false},
+     {id:"promesa", name:"La Promesa", desc:"Una línea que no se rompe.", pts:[[190,150,-180],[220,120,-190],[210,90,-175],[240,70,-185],[225,40,-170]], sec:false},
+     {id:"reencuentro", name:"El Reencuentro", desc:"Siempre hay un camino de vuelta a ti.", pts:[[-150,-160,120],[-110,-140,130],[-120,-100,115],[-80,-110,140],[-95,-70,125]], sec:false},
+     {id:"corazon", name:"Constelación del Corazón", desc:"La más especial de todas.", pts:null, sec:true}
+    ].forEach(def => {
+      const group = new THREE.Group(), vecs = def.pts ? def.pts.map(p=>new THREE.Vector3(...p)) : (()=>{const a=[],c=new THREE.Vector3(0,170,-140);for(let i=0;i<24;i++){const t=(i/23)*Math.PI*2;a.push(new THREE.Vector3(c.x+16*Math.pow(Math.sin(t),3)*5.6,c.y+(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))*5.6,c.z));}return a;})();
+      const starSprites = [];
+      vecs.forEach(p => {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({map:warmGlow, color:def.sec?0xffb8cf:0xcfe0ff, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:def.sec?0.05:0.95}));
+        s.position.copy(p); s.scale.setScalar(def.sec?3:5.5); group.add(s); starSprites.push(s);
+      });
+      const lineMat = new THREE.LineBasicMaterial({color:def.sec?0xffcf7a:0x8ea3ff, transparent:true, opacity:0});
+      group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(vecs), lineMat));
+      group.userData = { def, lineMat, center: def.pts ? vecs[Math.floor(vecs.length/2)].clone() : new THREE.Vector3(0, 170, -140) };
+      scene.add(group); constellationGroups.push({ def, group, lineMat, starSprites, center:group.userData.center, revealed:false });
+    });
+    
+    let heartPhotoSprite;
+    (function buildHeartPhoto() {
+      const size = 512, cvs = document.createElement("canvas"), ctx = cvs.getContext("2d"); cvs.width = cvs.height = size;
+      const tex = new THREE.CanvasTexture(cvs), mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false }); 
+      heartPhotoSprite = new THREE.Sprite(mat); heartPhotoSprite.position.copy(constellationGroups.find(c=>c.def.sec).center); heartPhotoSprite.position.y -= 12; heartPhotoSprite.scale.setScalar(1); 
+      heartPhotoSprite.userData = { type: "heartPhoto" }; interactiveObjects.push(heartPhotoSprite); scene.add(heartPhotoSprite);
+      const img = new Image(); img.crossOrigin = "Anonymous"; img.src = "nuestra-foto.jpg"; 
+      img.onload = () => {
+        ctx.clearRect(0,0,size,size); ctx.save(); ctx.beginPath(); ctx.arc(size/2, size/2-30, 150, 0, Math.PI*2); ctx.clip();
+        const scale = Math.max(300/img.width, 300/img.height), w = img.width*scale, h = img.height*scale;
+        ctx.drawImage(img, size/2-w/2, size/2-30-h/2, w, h); ctx.restore();
+        ctx.beginPath(); ctx.arc(size/2, size/2-30, 150, 0, Math.PI*2); ctx.lineWidth=14; ctx.strokeStyle="rgba(255,215,107,0.8)"; ctx.stroke();
+        ctx.font="italic 36px Georgia"; ctx.fillStyle="#ffe9ab"; ctx.textAlign="center"; ctx.shadowColor="rgba(0,0,0,0.9)"; ctx.shadowBlur=10; ctx.fillText("I love you...", size/2, size/2+160); tex.needsUpdate = true;
+      };
+    })();
+
+    /* --- 7. CÁMARA Y CONTROLES --- */
+    const cam = { theta: 0.5, phi: 1.25, radius: 950 }, target = new THREE.Vector3(0,0,0);
+    let lastInteraction = performance.now(), journeyStarted = false, introProgress = 0, flying = null;
+    let isDragging = false, dragMoved = false, lastPointer = {x:0,y:0}, pointers = new Map(), pinchStartDist = null, pinchStartRadius = 300;
+    
+    function markInteraction() { lastInteraction = performance.now(); }
+    
+    canvas.addEventListener("pointerdown", e => {
+      canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, {x:e.clientX,y:e.clientY}); markInteraction();
+      if(pointers.size===1){ isDragging=true; dragMoved=false; lastPointer={x:e.clientX,y:e.clientY}; canvas.classList.add("dragging"); }
+    });
+    
+    canvas.addEventListener("pointermove", e => {
+      if(!pointers.has(e.pointerId)) return; pointers.set(e.pointerId, {x:e.clientX,y:e.clientY}); markInteraction();
+      if(pointers.size===2){
+        const pts=[...pointers.values()], dist=Math.hypot(pts[0].x-pts[1].x, pts[0].y-pts[1].y);
+        if(!pinchStartDist){ pinchStartDist=dist; pinchStartRadius=cam.radius; }
+        else cam.radius = Math.max(70, Math.min(800, pinchStartRadius * (pinchStartDist/dist)));
+      } else if(isDragging && pointers.size===1){
+        const dx=e.clientX-lastPointer.x, dy=e.clientY-lastPointer.y;
+        if(Math.abs(dx)+Math.abs(dy)>3) dragMoved=true;
+        cam.theta-=dx*0.0045; cam.phi=Math.max(0.35, Math.min(Math.PI-0.35, cam.phi-dy*0.0045));
+        lastPointer={x:e.clientX,y:e.clientY};
+      }
+    });
+    
+    // FIX DE SALTO PINCH-TO-ZOOM
+    canvas.addEventListener("pointerup", e => {
+      const wasTap = pointers.size===1 && !dragMoved && !pinchStartDist, pt = pointers.get(e.pointerId);
+      pointers.delete(e.pointerId);
+      if(pointers.size < 2) pinchStartDist = null;
+      if(pointers.size === 1) { const rem = [...pointers.values()][0]; lastPointer = {x: rem.x, y: rem.y}; } 
+      if(pointers.size === 0) { isDragging=false; canvas.classList.remove("dragging"); }
+      if(wasTap && pt) handleTap(pt.x,pt.y);
+    });
+    
+    canvas.addEventListener("wheel", e => { e.preventDefault(); markInteraction(); cam.radius=Math.max(70, Math.min(800, cam.radius*Math.exp(e.deltaY*0.0013))); }, {passive:false});
+    
+    const raycaster = new THREE.Raycaster(); raycaster.params.Sprite = {threshold:6};
+    function handleTap(sx, sy) {
+      raycaster.setFromCamera({x: (sx/innerWidth)*2-1, y: -(sy/innerHeight)*2+1}, camera);
+      const hits = raycaster.intersectObjects(interactiveObjects, false);
+      if(hits.length){
+        const obj = hits[0].object;
+        if(obj.userData.type==="planet"){ flyTo(obj.userData.ref.mesh.position, obj.userData.ref.def.r*11); if(obj.userData.ref.def.special) setTimeout(()=>openDedication(),650); }
+        else if(obj.userData.type==="memoryStar") onStarTap(obj.userData.ref);
+        else if(obj.userData.type==="heartPhoto") flyTo(constellationGroups.find(c=>c.def.sec).center, 220); 
+      } else if(guideActive) {
+         for(const c of constellationGroups){ if(c.def.sec && !c.revealed) continue; if(raycaster.intersectObjects(c.group.children, false).length){ document.getElementById("constellation-content").innerHTML = `<div class="memory-label">Constelación</div><div class="constellation-name">${c.def.name}</div><div class="constellation-desc">${c.def.desc}</div>`; document.getElementById("constellation-modal").classList.add("open"); break; } }
+      }
+    }
+    
+    function onStarTap(s) {
+      flyTo(s.pos, 90);
+      if (!s.discovered) {
+        s.discovered = true; s.sprite.material.color.set(0xbfe3ff); s.core.material.color.set(0xbfe3ff);
+        const N=30, p=new Float32Array(N*3), v=[]; for(let i=0;i<N;i++){p[i*3]=s.pos.x;p[i*3+1]=s.pos.y;p[i*3+2]=s.pos.z;v.push(new THREE.Vector3(Math.random()-0.5,Math.random()-0.5,Math.random()-0.5).normalize().multiplyScalar(Math.random()*40+20));}
+        const pts = new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(p,3)), new THREE.PointsMaterial({size:3.5, map:warmGlow, color:0xffe9b0, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending})); scene.add(pts); bursts.push({pts, v, life:0, origin:s.pos.clone()});
+        const found = memoryStars.filter(m=>m.discovered).length; document.getElementById("progress-text").textContent = `${found} / ${memoryStars.length} recuerdos`;
+        document.getElementById("progress-badge").classList.add("show", "pulse"); setTimeout(()=>document.getElementById("progress-badge").classList.remove("pulse"), 650);
+        if (found === memoryStars.length && !secretUnlocked) { secretUnlocked = true; pendingHeartUnlock = true; }
+      }
+      setTimeout(() => {
+        let html = s.memory.type==="foto" ? (s.memory.photo ? `<img class="memory-photo" src="${s.memory.photo}">` : `<div class="memory-placeholder">📷</div>`) : "";
+        html += `<div class="memory-label">${s.memory.type==="fecha"?"Una fecha":"Un recuerdo"}</div>`;
+        if(s.memory.text) html += s.memory.type==="fecha" ? `<div class="memory-date">${s.memory.text}</div>` : `<div class="memory-phrase">"${s.memory.text}"</div>`;
+        if(s.memory.caption) html += `<div class="memory-phrase" style="font-size:16px; margin-top:10px;">${s.memory.caption}</div>`;
+        document.getElementById("memory-content").innerHTML = html; document.getElementById("memory-modal").classList.add("open");
+      }, 500);
+    }
+    
+    function flyTo(worldPos, targetRadius, resetAngles = false) {
+      flying = { t:0, duration:900, fromT:target.clone(), toT:worldPos.clone(), fromR:cam.radius, toR:targetRadius, fromTheta: cam.theta, toTheta: resetAngles ? 0.5 : cam.theta, fromPhi: cam.phi, toPhi: resetAngles ? 1.25 : cam.phi }; markInteraction();
+    }
+    document.getElementById("zoom-in").addEventListener("click", () => flyTo(target, Math.max(70, cam.radius * 0.7)));
+    document.getElementById("zoom-out").addEventListener("click", () => flyTo(target, Math.min(800, cam.radius * 1.4)));
+    document.getElementById("zoom-reset").addEventListener("click", () => flyTo(new THREE.Vector3(0,0,0), 300, true));
+
+    /* --- 8. PROGRESO Y ANIMACIÓN --- */
+    let secretUnlocked = false, pendingHeartUnlock = false;
+    
+    function openDedication() { document.getElementById("dedication-text").textContent = DEDICATION_TEXT; document.getElementById("dedication-modal").classList.add("open"); }
+    function closeModals() {
+      document.querySelectorAll(".modal-overlay").forEach(m => m.classList.remove("open"));
+      if (pendingHeartUnlock) {
+        pendingHeartUnlock = false;
+        setTimeout(() => {
+          const secret = constellationGroups.find(c=>c.def.sec); secret.lineMat.color.set(0xffcf7a); secret.revealed = true; flyTo(secret.center, 220);
+          const el = document.getElementById("discovery-banner"); el.innerHTML = `<div class="db-title">💖 Constelación del Corazón desbloqueada</div><div class="db-sub">Has encontrado cada recuerdo escondido en este cielo</div>`; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"), 4500);
+          const fIn = (arr, prop, from, to, dur) => { const s=performance.now(); const step=(now)=>{ const p=Math.min(1,(now-s)/dur), e=1-Math.pow(1-p,2), v=from+(to-from)*e; arr.forEach(o => { if(prop==="setScalar") o.setScalar(v); else o[prop]=v; }); if(p<1) requestAnimationFrame(step); }; requestAnimationFrame(step); };
+          fIn(secret.starSprites.map(s => s.material), "opacity", 0.05, 0.95, 1800); fIn(secret.starSprites.map(s => s.scale), "setScalar", 3, 5.4, 1800); fIn([secret.lineMat], "opacity", 0, 0.9, 1800);
+          setTimeout(() => { fIn([heartPhotoSprite.material], "opacity", 0, 1, 2500); fIn([heartPhotoSprite.scale], "setScalar", 1, 95, 2500); }, 1800);
+        }, 600);
+      }
+    }
+    document.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeModals));
+    document.querySelectorAll(".modal-overlay").forEach(m => m.addEventListener("click", e=>{if(e.target===m)closeModals();}));
+
+    let t = 0, lastTime = performance.now(), bursts = [];
+    let guideActive=false;
+    document.getElementById("btn-guia").addEventListener("click", function() { guideActive=!guideActive; this.classList.toggle("active", guideActive); document.getElementById("compass").classList.toggle("show", guideActive); constellationGroups.forEach(c => { if(!c.def.sec) c.lineMat.opacity = guideActive ? 0.55 : 0; }); });
+
+    function animate(now) {
+      const dt = Math.min(48, now - lastTime); lastTime = now; t += dt/1000;
+      if(journeyStarted && introProgress<1) { introProgress+=dt/2600; cam.radius = 950 + (300-950)*(1-Math.pow(1-Math.min(1,introProgress),3)); }
+      if(!isDragging && now-lastInteraction>4500 && !flying) cam.theta += 0.00022*dt;
+      
+      if(flying) { flying.t += dt; const p = Math.min(1, flying.t/flying.duration), e = 1-Math.pow(1-p, 3); target.lerpVectors(flying.fromT, flying.toT, e); cam.radius = flying.fromR + (flying.toR - flying.fromR)*e; cam.theta = flying.fromTheta + (flying.toTheta - flying.fromTheta)*e; cam.phi = flying.fromPhi + (flying.toPhi - flying.fromPhi)*e; if(p>=1) flying = null; }
+      camera.position.set(target.x+cam.radius*Math.sin(cam.phi)*Math.sin(cam.theta), target.y+cam.radius*Math.cos(cam.phi), target.z+cam.radius*Math.sin(cam.phi)*Math.cos(cam.theta)); camera.lookAt(target);
+      
+      if(guideActive) {
+        const near = memoryStars.filter(s=>!s.discovered)[0], targetPos = near ? near.pos : (planets.find(p=>p.def.special) && !planets.find(p=>p.def.special).discovered ? planets.find(p=>p.def.special).mesh.position : null);
+        if(targetPos){ let diff = Math.atan2(targetPos.x-target.x, targetPos.z-target.z) - cam.theta; document.getElementById("compass-needle").style.transform = `rotate(${Math.atan2(Math.sin(diff),Math.cos(diff))}rad)`; document.getElementById("compass-label").textContent = near ? "recuerdo cercano" : "nuestro planeta"; } else { document.getElementById("compass-label").textContent = "todo ha sido descubierto ✨"; }
+      }
+
+      bgStars.rotation.y += 0.000045*dt; bgStars.rotation.x += 0.000011*dt; stardust.rotation.y -= 0.00003*dt;
+      nebulaSprites.forEach(n => { n.sprite.position.x = n.baseX + Math.sin(t*0.06+n.phase)*14; n.sprite.material.rotation += n.drift*dt; });
+      planets.forEach(p => { if(p.def.oR>0){ p.angle += p.spin*0.0022*dt; p.mesh.position.set(Math.cos(p.angle)*p.def.oR*0.35+p.basePos.x*0.6, p.basePos.y+Math.sin(t*0.3+p.angle)*6, Math.sin(p.angle)*p.def.oR*0.35+p.basePos.z*0.6); } p.mesh.rotation.y += p.spin*0.01*dt; if(p.def.special) p.mesh.children.forEach(c => { if(c.type==="Sprite") c.scale.setScalar(p.def.r*7*(1+Math.sin(t*1.6)*0.04)); }); });
+      memoryStars.forEach(s => { s.sprite.material.opacity = s.discovered ? 0.5+Math.sin(t*0.6+s.phase)*0.08 : 0.75+0.25*Math.sin(t*1.8+s.phase); s.sprite.scale.setScalar(s.discovered ? 6.5 : 9+Math.sin(t*2.2+s.phase)*1.2); });
+      for(let i=bursts.length-1; i>=0; i--){ const b=bursts[i]; b.life+=dt; const bp = b.life/1200, pos = b.pts.geometry.attributes.position; for(let j=0; j<b.v.length; j++){ pos.array[j*3]=b.origin.x+b.v[j].x*bp*0.9; pos.array[j*3+1]=b.origin.y+b.v[j].y*bp*0.9; pos.array[j*3+2]=b.origin.z+b.v[j].z*bp*0.9; } pos.needsUpdate=true; b.pts.material.opacity=Math.max(0,1-bp); if(bp>=1){ scene.remove(b.pts); b.pts.geometry.dispose(); bursts.splice(i,1); } }
+      renderer.render(scene, camera); requestAnimationFrame(animate);
+    }
+    requestAnimationFrame(animate);
+
+    window.addEventListener("load", () => {
+      document.getElementById("loader").classList.add("hidden");
+      setTimeout(() => {
+        document.getElementById("briefing-title").textContent = LORE_TITLE; document.getElementById("briefing-text").textContent = LORE_TEXT; document.getElementById("briefing-objectives").innerHTML = OBJECTIVES.map(o=>`<li><span>${o.icon}</span><span>${o.text}</span></li>`).join("");
+        document.getElementById("briefing").classList.remove("hidden");
+      }, 550);
+    });
+    document.getElementById("briefing-start").addEventListener("click", () => {
+      document.getElementById("briefing").classList.add("hidden"); journeyStarted = true; markInteraction();
+      
+      // Activar música de fondo
+      const bgMusic = document.getElementById("bg-music");
+      bgMusic.volume = 0.5;
+      bgMusic.play().catch(e => console.log("Audio requiere interacción previa", e));
+
+      setTimeout(() => { document.getElementById("hint").classList.add("show"); setTimeout(()=>document.getElementById("hint").classList.remove("show"), 6200); }, 700);
+      setTimeout(() => document.getElementById("progress-badge").classList.add("show"), 3000);
+    });
+  })();
+  </script>
+</body>
+</html>
